@@ -643,6 +643,13 @@ class CFT:
                 self.make_document_livetarget(doc)         
         button_train.on_click(livedatatarget)
 
+        button_profile = Button(label="Profile")
+        def profile():
+                self.layout.children.pop()
+                self.layout.children.pop()
+                self.make_document_profile(doc)         
+        button_profile.on_click(profile)
+
 
         button_rfd = Button(label="Rate of force development (Contact strength)")
         def butrfd():
@@ -662,7 +669,7 @@ class CFT:
                        style={'font-size': '100%', 'color': 'black',                             
                               'text-align': 'center'})              
         
-        c = column(button_max,button_cft,button_rfd,button_send,button_live,button_train,button_quit)
+        c = column(button_max,button_cft,button_rfd,button_send,button_live,button_train,button_profile,button_quit)
         self.layout=column(c,column() )
         doc.add_root(self.layout)
         self.doc=doc
@@ -734,6 +741,65 @@ class CFT:
         self.source.data=dict(x=[], y=[])
         io_loop = tornado.ioloop.IOLoop.current()
         io_loop.add_callback(start_tindeq_logging, self)
+
+###############
+    def make_document_profile(self, doc):
+        self.reset()        
+
+        self.source = ColumnDataSource(data=dict(x=[], y=[]))
+        self.source_end = ColumnDataSource(data=dict(x=[], y=[]))
+
+       
+        self.btn_go = Button(label='Waiting for Progressor...')
+        self.btn_go.on_click(self.onclick_livetarget)
+
+        self.btn_stop = Button(label='Stop and reset')
+        self.btn_stop.on_click(self.onclick_stop)
+        
+        self.button_save = Button(label='Back to main menue')   
+
+        def mainmenue():
+                self.layout.children.pop()
+                self.layout.children.pop()
+                self.make_document_choice(doc)       
+                doc.remove_periodic_callback(self.calback_update_livetarget)
+                if self.tindeq is not None:
+                    io_loop = tornado.ioloop.IOLoop.current()              
+                    io_loop.add_callback(stop_tindeq_logging, self)
+        
+        self.button_save.on_click(mainmenue)
+ 
+        div_instruct = Div(text='Please create a profile',\
+                       style={'font-size': '100%', 'color': 'black',                             
+                              'text-align': 'left'})  
+            
+        self.name = TextInput(title="Name")
+        self.email = TextInput(title="Email")
+        self.weight = Spinner(title="weight (KG)", low=1, step=1, value=50)
+        self.be1 = Button(label='Save results to database')
+        def save_data():
+            name = self.name.value
+            email = self.email.value
+            weight = self.weight.value
+            if len(name)>2 & len(email)>2 & ('@' in email) & (weight>0):
+                df=pd.DataFrame(columns=['Name','Email','Weight'])
+                df.loc[0]=[name,email,weight]
+                df.to_csv( email + '_profile.csv' )
+                
+        r1=row(self.name,self.email,sizing_mode='scale_width')
+        r2=row(self.weight, self.be1,sizing_mode='scale_width')
+            
+        self.source_targetbox= ColumnDataSource(data=dict(t=[], b=[], l=[], r=[]))
+
+                # print(text_input_mail.value)
+        self.be1.on_click(save_data)
+        
+        widgets = column( div_instruct,r1,r2,self.button_save,width=400 ) 
+        # first_row = row(widgets, fig)
+        
+        self.layout=row(widgets)
+        doc.add_root(self.layout)
+
 ###############
 
     def make_document_livetarget(self, doc):
@@ -797,7 +863,7 @@ class CFT:
         # self.fig = fig
         self.calback_update_livetarget = doc.add_periodic_callback(self.update_livetarget, 50)
         self.btn_go.disabled=True
-
+   
     def update_livetarget(self):      
         
         if self.tindeq is not None:
@@ -1334,7 +1400,21 @@ class CFT:
             # self.laps.text = f"Rep {1 + nlaps - self.reps}/{nlaps}"
             self.reset()
             
-            
+class User:
+    def __init__(self, name, email, weight):
+        self.name = name
+        self.email = email
+        self.weight = weight
+
+    def get_name(self):
+        return self.name
+    
+    def get_email(self):
+        return self.email
+
+    def __str__(self):
+        return self.name
+
 ###################################
 async def connect(cft):
     tindeq = TindeqProgressor(cft)
@@ -1420,7 +1500,7 @@ cft = CFT()
 cft.make_gui(curdoc())
 
 apps = {'/': Application(FunctionHandler(cft.make_gui))}
-server = Server(apps, port=5000 )
+server = Server(apps, port=5001 )
 server.start()
 
 if __name__ == "__main__":
